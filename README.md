@@ -81,7 +81,7 @@ Yes, do it!をクリック
 
 ![image](https://github.com/user-attachments/assets/567f49db-46c6-4d73-9928-262452a2b201)
 
-この画面が出たらAuthの番号を打つ(Passwordの場合はアカウントのパスワード)
+この画面が出たらAuthの番号を打つ(なんとかPasswordの場合はアカウントのパスワードを打つ)
 
 ### コードの編集
 

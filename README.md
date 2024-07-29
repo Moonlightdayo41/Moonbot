@@ -73,7 +73,15 @@ Createをクリックします
 
 ![image](https://github.com/user-attachments/assets/48f7b3c8-3269-458f-9bbb-f42ce9ccc2d6)
 
+Reset Tokenをクリック
 
+![image](https://github.com/user-attachments/assets/f4ad0eb0-75ff-4a1b-8a70-accd6ab7ca03)
+
+Yes, do it!をクリック
+
+![image](https://github.com/user-attachments/assets/567f49db-46c6-4d73-9928-262452a2b201)
+
+この画面が出たらAuthの番号を打つ(Passwordの場合はアカウントのパスワード)
 
 ### コードの編集
 

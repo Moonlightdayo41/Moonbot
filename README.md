@@ -37,17 +37,41 @@ BOTの情報を表示します
 
 ``g!avatar @user``
 
-ユーザーのアバターを表示します
+ユーザーのアバターを取得して表示します
 
 ``g!mcskin <mcid>``
 
-Minecraftスキンを表示します
+MCIDからMinecraftスキンを取得します ※Java Editionのみ
 
-``g!idinvite``
+``g!idinvite <guildid>``
 
-サーバーidからサーバーの招待リンクを生成します
+サーバーid(guildid)からサーバーの招待リンクを生成します
 
-## 使い方
+## グローバル版
+
+[グローバル版導入](https://discord.com/oauth2/authorize?client_id=1264941322515644548&permissions=8&integration_type=0&scope=bot+applications.commands)
+
+サーバーを選択をクリックして、botを入れたいサーバーをクリックします
+
+![image](https://github.com/user-attachments/assets/27aae2a4-cf5d-4138-acdc-644486596dc6)
+
+はいをクリックします
+
+![image](https://github.com/user-attachments/assets/a67e3507-8d1f-4c94-ba5b-d5fdf1cac9af)
+
+認証をクリックします
+
+![image](https://github.com/user-attachments/assets/5b67742a-faae-4b3c-9398-f8519c89577f)
+
+私は人間ですにチェックを入れます
+
+![image](https://github.com/user-attachments/assets/ae32d55c-d54e-47f9-964f-04fc0b000900)
+
+この画面が出たら導入は完了です。
+
+![image](https://github.com/user-attachments/assets/3477f3c2-95bc-4e6f-9794-e3bba365dc32)
+
+## ローカル版
 
 ### Botの作成
 
@@ -153,7 +177,7 @@ Tokenが生成されるので、Copyを押します
 }
 ```
 
-Token hereをbotのtokenに置き換えます
+Token hereを先ほど保存しておいたtokenに置き換えます
 
 ### 実行
 

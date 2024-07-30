@@ -49,7 +49,7 @@ MCIDからMinecraftスキンを取得します ※Java Editionのみ
 
 ## グローバル版
 
-[グローバル版導入](https://discord.com/oauth2/authorize?client_id=1264941322515644548&permissions=8&integration_type=0&scope=bot+applications.commands)
+[グローバル版のBot招待リンク](https://discord.com/oauth2/authorize?client_id=1264941322515644548&permissions=8&integration_type=0&scope=bot+applications.commands)を開きます
 
 サーバーを選択をクリックして、botを入れたいサーバーをクリックします
 
@@ -145,7 +145,7 @@ Tokenが生成されるので、Copyを押します
 
 ![image](https://github.com/user-attachments/assets/848781a6-ac56-43d1-82d4-10292438154c)
 
-一番下のGENERATED URLの中にあるURLを選択して右クリックしてhttps://discord.com/oauth2/authorize?client_id...に移動をクリックします(URLの横のCopyではないので注意)
+一番下のGENERATED URLの中にあるURLを選択して右クリックしてhttps.//discord.com/oauth2/authorize?client_id...に移動をクリックします(URLの横のCopyではないので注意)
 
 ![image](https://github.com/user-attachments/assets/52b77f9d-b891-47f4-a316-e8fb7b51b1a0)
 

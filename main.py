@@ -7,7 +7,17 @@ import base64
 import io
 import yt_dlp as youtube_dl
 import ffmpeg
+import pytesseract
+from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
+import os
+import asyncio
+from dotenv import load_dotenv
+import urllib.parse
+import urllib.request
+import re
 
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Windowsの場合。適宜変更
 
 # config.json からトークンを読み込む
 with open('config.json') as f:
@@ -18,8 +28,23 @@ TOKEN = config['TOKEN']
 
 client = discord.Client(intents=discord.Intents.all())
 
+# グローバル変数
+voice_clients = {}
+
+ytdl_options = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+}
+
+ffmpeg_options = {
+    'options': '-vn -ar 48000 -ac 2 -ab 192k',
+}
+
+
+
 bot = commands.Bot(command_prefix="g!", intents=discord.Intents.all())
 bot.remove_command("help")
+
 
 intents = discord.Intents.default()
 intents.members = True  
@@ -123,7 +148,11 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="g!botinfo", value=f"{bot.user.name}の情報を表示します")
     embed.add_field(name="g!userinfo @user", value="ユーザーの情報を取得します")
     embed.add_field(name="g!avatar @user", value="ユーザーのアバターを表示します")
-    embed.add_field(name="g!mcskin <gamertag>", value="Minecraftスキンを表示します")
+    embed.add_field(name="g!mcskin <mcid>", value="Minecraftスキンを表示します")
+    embed.add_field(name="g!idinvite <guildid>", value="サーバーidからサーバーの招待リンクを生成します")
+    embed.add_field(name="g!play <URL>", value="指定したURLの音楽を再生します。")
+    embed.add_field(name="g!stop", value="再生中の音楽を停止します。")
+    embed.add_field(name="g!tts <text>", value="指定したテキストを音声で再生します。")
     await interaction.response.send_message(embed=embed)
 
 @bot.command()
@@ -245,5 +274,95 @@ async def mcskin(ctx, gamertag: str):
         await ctx.send(f"⛔データ取得エラー: {e}")
     except Exception as e:
         await ctx.send(f"⛔エラーが発生しました: {e}")
+
+@bot.command()
+async def play(ctx, *url):
+    global voice_clients
+    try:
+        url = " ".join(url)
+        print(f"Requesting URL: {url}")
+        
+        voice_client = await ctx.author.voice.channel.connect()
+        voice_clients[ctx.guild.id] = voice_client
+
+        loop = asyncio.get_event_loop()
+        ytdl = youtube_dl.YoutubeDL(ytdl_options)
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
+
+        if data is None:
+            raise ValueError("⛔指定されたURLから動画の情報を取得できませんでした")
+
+        if 'entries' in data:
+            data = data['entries'][0]
+
+        title = data.get('title') if data else 'unknown'
+        print(f"✅{title}を再生中です")
+
+        url2 = data['url']
+        source = await discord.FFmpegOpusAudio.from_probe(url2, **ffmpeg_options)
+        voice_clients[ctx.guild.id].play(source)
+        embed = discord.Embed(title=f"✅{title}を再生中です", color=discord.Colour.green())
+        await ctx.send(embed=embed)
+        await ctx.message.delete()
+    except Exception as e:
+        embed = discord.Embed(title="⛔エラー", description=f"エラーが発生しました: {e}", color=0xff0000)
+        await ctx.send(embed=embed)
+        await ctx.message.delete()
+
+@bot.command()
+async def stop(ctx):
+    global voice_clients
+    try:
+        voice_client = voice_clients.get(ctx.guild.id)
+        if voice_client:
+            await voice_client.disconnect()
+            del voice_clients[ctx.guild.id]
+            embed = discord.Embed(title="✅音楽の再生を停止しました", color=discord.Colour.green())
+            await ctx.send(embed=embed)
+        else:
+            embed = discord.Embed(title="⛔エラー", description="再生中の音楽がありません", color=0xff0000)
+            await ctx.send(embed=embed)
+        await ctx.message.delete()
+    except Exception as e:
+        embed = discord.Embed(title="⛔エラー", description=f"エラーが発生しました: {e}", color=0xff0000)
+        await ctx.send(embed=embed)
+        await ctx.message.delete()
+
+@bot.command()
+async def tts(ctx, *, message):
+    try:
+        url_encoded_message = urllib.parse.quote(message)
+        url = f"http://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={url_encoded_message}&tl=ja"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"}
+
+        request = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(request) as response:
+            audio_data = response.read()
+
+        if os.path.exists("tts.mp3"):
+            os.remove("tts.mp3")
+
+        with open("tts.mp3", "wb") as file:
+            file.write(audio_data)
+
+        voice_channel = ctx.author.voice.channel
+        if not voice_channel:
+            await ctx.send("⛔まずボイスチャンネルに参加してください。")
+            return
+
+        voice_client = voice_clients.get(ctx.guild.id)
+        if voice_client is None:
+            voice_client = await voice_channel.connect()
+            voice_clients[ctx.guild.id] = voice_client
+        
+        voice_client.play(discord.FFmpegPCMAudio("tts.mp3"))
+        embed = discord.Embed(title="TTS", description=message, color=discord.Colour.green())
+        await ctx.send(embed=embed)
+        await ctx.message.delete()
+    except Exception as e:
+        embed = discord.Embed(title="⛔エラー", description=f"エラーが発生しました: {e}", color=0xff0000)
+        await ctx.send(embed=embed)
+        await ctx.message.delete()
 
 bot.run(TOKEN)

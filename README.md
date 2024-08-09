@@ -47,6 +47,9 @@ MCIDからMinecraftスキンを取得します ※Java Editionのみ
 
 サーバーid(guildid)からサーバーの招待リンクを生成します
 
+``g!play <URL>``
+指定されたURL
+
 ## グローバル版
 
 [グローバル版のBot招待リンク](https://discord.com/oauth2/authorize?client_id=1264941322515644548&permissions=8&integration_type=0&scope=bot+applications.commands)を開きます

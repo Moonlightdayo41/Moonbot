@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord.ui import Button, View
 import json
 import sys
 import requests
@@ -7,17 +8,15 @@ import base64
 import io
 import yt_dlp as youtube_dl
 import ffmpeg
-import pytesseract
-from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import os
 import asyncio
 from dotenv import load_dotenv
 import urllib.parse
 import urllib.request
-import re
+import aiohttp
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Windowsの場合。適宜変更
+
 
 # config.json からトークンを読み込む
 with open('config.json') as f:
@@ -148,11 +147,11 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(name="g!botinfo", value=f"{bot.user.name}の情報を表示します")
     embed.add_field(name="g!userinfo @user", value="ユーザーの情報を取得します")
     embed.add_field(name="g!avatar @user", value="ユーザーのアバターを表示します")
-    embed.add_field(name="g!mcskin <mcid>", value="Minecraftスキンを表示します")
+    embed.add_field(name="/mcskin <mcid>", value="Minecraftスキンを表示します")
     embed.add_field(name="g!idinvite <guildid>", value="サーバーidからサーバーの招待リンクを生成します")
     embed.add_field(name="g!play <URL>", value="指定したURLの音楽を再生します。")
     embed.add_field(name="g!stop", value="再生中の音楽を停止します。")
-    embed.add_field(name="g!tts <text>", value="指定したテキストを音声で再生します。")
+    embed.add_field(name="/mcserver <address> <version>", value="Minecraftサーバーの情報を取得します")
     await interaction.response.send_message(embed=embed)
 
 @bot.command()
@@ -178,7 +177,7 @@ async def serverinfo(ctx):
 @bot.command()
 async def userinfo(ctx, member: discord.Member = None):
     if member is None:
-        await ctx.send("⛔ユーザーを指定してください。例: `g!userinfo @ユーザー`")
+        await ctx.send("⛔ユーザーを指定してください。例: g!userinfo @ユーザー")
         return
     
     embed = discord.Embed(title=f"{member.name}の情報", color=0x00ff00)
@@ -189,7 +188,7 @@ async def userinfo(ctx, member: discord.Member = None):
     embed.add_field(name="アカウント作成日", value=member.created_at.strftime('%Y-%m-%d'), inline=True)
     embed.add_field(name="サーバー参加日", value=member.joined_at.strftime('%Y-%m-%d'), inline=True)
     roles = [role.mention for role in member.roles[1:]]  # 最初のロールは @everyone なので除外
-    embed.add_field(name="ロール", value=", ".join(roles) if roles else "ロールなし", inline=False)
+    embed.add_field(name="ロール", value=", ".join(roles) if roles else "ロールなし", inline=True)
     await ctx.send(embed=embed)
     await ctx.message.delete()
 
@@ -203,7 +202,7 @@ async def avatar(ctx, member: discord.Member = None):
     await ctx.send(embed=embed)
 
 @bot.command()
-@commands.has_permissions(administrator=True)  # 管理者権限が必要
+@commands.has_permissions(create_instant_invite=True)  # 管理者権限が必要
 async def idinvite(ctx, server_id: int):
     try:
         guild = bot.get_guild(server_id)
@@ -218,23 +217,53 @@ async def idinvite(ctx, server_id: int):
             await ctx.author.send(f"✅以下がサーバーの招待リンクです:\n{invite_link}")
             await ctx.send("✅招待リンクをDMで送信しました。")
         except discord.Forbidden:
-            await ctx.send("⛔DMを送信できません。DMがブロックされているか、DMを受け取る設定になっていない可能性があります。")
+            await ctx.send("⛔DMを送信できません。DMがブロックされているか、相手がDMを受信しない設定になっている可能性があります。")
     except discord.Forbidden:
         await ctx.send("⛔この操作を実行する権限がありません。")
     except Exception as e:
         await ctx.send(f"⛔エラーが発生しました: {e}")
 
-@bot.command()
-async def mcskin(ctx, gamertag: str):
+
+
+class DownloadSkinButton(Button):
+    def __init__(self, skin_url: str):
+        super().__init__(
+            label="スキンをダウンロード", 
+            style=discord.ButtonStyle.primary,
+            emoji="⬇️"
+        )
+        self.skin_url = skin_url
+
+    async def callback(self, interaction: discord.Interaction):
+        try:
+            response = requests.get(self.skin_url)
+            response.raise_for_status()
+            
+            # ファイル名を設定
+            filename = f"minecraft_skin_{interaction.user.id}.png"
+            
+            # ユーザーにファイルを送信
+            await interaction.response.send_message(
+                file=discord.File(io.BytesIO(response.content), filename=filename),
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.response.send_message(
+                f"⚠️ダウンロード中にエラーが発生しました: {e}", 
+                ephemeral=True
+            )
+@bot.tree.command(name="mcskin", description="Minecraftのスキンを表示します")
+@discord.app_commands.describe(mcid="MinecraftのMCIDを指定してください")
+async def mcskin(interaction: discord.Interaction, mcid: str):
     try:
         # Mojang APIを使用してUUIDを取得
-        mojang_response = requests.get(f'https://api.mojang.com/users/profiles/minecraft/{gamertag}')
+        mojang_response = requests.get(f'https://api.mojang.com/users/profiles/minecraft/{mcid}')
         mojang_response.raise_for_status()
         data = mojang_response.json()
         uuid = data.get('id')
         
         if not uuid:
-            await ctx.send("⛔指定されたゲーマータグが見つかりません。")
+            await interaction.response.send_message("⛔指定されたMCIDが見つかりません。")
             return
         
         # UUIDからスキンのURLを取得
@@ -250,30 +279,26 @@ async def mcskin(ctx, gamertag: str):
         response.raise_for_status()
         img_data = response.content
 
-        # 画像のファイルを一時的に保存
-        with open('skin_image.png', 'wb') as file:
-            file.write(img_data)
+        # Viewの作成
+        view = View()
+        view.add_item(DownloadSkinButton(skin_url))
 
-        # ボタンの作成
-        class SaveButton(discord.ui.View):
-            def __init__(self):
-                super().__init__()
-                self.add_item(discord.ui.Button(label="保存", url="https://example.com/save_image"))
-
+        # 一時ファイルとしてメモリ上に保存
+        file = discord.File(io.BytesIO(img_data), filename="skin_preview.png")
+        
         # メッセージを送信
-        with open('skin_image.png', 'rb') as file:
-            await ctx.send(
-                f"{gamertag}ここにMinecraftスキンの画像があります。",
-                file=discord.File(file, 'skin_image.png'),
-                view=SaveButton()
-            )
+        await interaction.response.send_message(
+            f"{mcid}のMinecraftスキンはこちらです。",
+            file=file,
+            view=view
+        )
 
     except requests.RequestException as e:
-        await ctx.send(f"⛔ネットワークエラー: {e}")
+        await interaction.response.send_message(f"⛔ネットワークエラー: {e}")
     except KeyError as e:
-        await ctx.send(f"⛔データ取得エラー: {e}")
+        await interaction.response.send_message(f"⛔データ取得エラー: {e}")
     except Exception as e:
-        await ctx.send(f"⛔エラーが発生しました: {e}")
+        await interaction.response.send_message(f"⛔エラーが発生しました: {e}")
 
 @bot.command()
 async def play(ctx, *url):
@@ -328,41 +353,57 @@ async def stop(ctx):
         await ctx.send(embed=embed)
         await ctx.message.delete()
 
-@bot.command()
-async def tts(ctx, *, message):
-    try:
-        url_encoded_message = urllib.parse.quote(message)
-        url = f"http://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q={url_encoded_message}&tl=ja"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"}
 
-        request = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(request) as response:
-            audio_data = response.read()
 
-        if os.path.exists("tts.mp3"):
-            os.remove("tts.mp3")
 
-        with open("tts.mp3", "wb") as file:
-            file.write(audio_data)
 
-        voice_channel = ctx.author.voice.channel
-        if not voice_channel:
-            await ctx.send("⛔まずボイスチャンネルに参加してください。")
-            return
+@bot.tree.command(name="mcserver", description="Minecraftサーバーの情報を取得します")
+@discord.app_commands.describe(
+    address="MinecraftサーバーのIPアドレスまたはドメイン名",
+    version="Java版または統合版を選択"
+)
+@discord.app_commands.choices(
+    version=[
+        discord.app_commands.Choice(name="Java版", value="java"),
+        discord.app_commands.Choice(name="統合版", value="bedrock")
+    ]
+)
+async def mcserver(interaction: discord.Interaction, address: str, version: discord.app_commands.Choice[str]):
+    if version.value == "java":
+        url = f"https://api.mcsrvstat.us/2/{address}"
+    else:
+        url = f"https://api.mcsrvstat.us/bedrock/2/{address}"
 
-        voice_client = voice_clients.get(ctx.guild.id)
-        if voice_client is None:
-            voice_client = await voice_channel.connect()
-            voice_clients[ctx.guild.id] = voice_client
-        
-        voice_client.play(discord.FFmpegPCMAudio("tts.mp3"))
-        embed = discord.Embed(title="TTS", description=message, color=discord.Colour.green())
-        await ctx.send(embed=embed)
-        await ctx.message.delete()
-    except Exception as e:
-        embed = discord.Embed(title="⛔エラー", description=f"エラーが発生しました: {e}", color=0xff0000)
-        await ctx.send(embed=embed)
-        await ctx.message.delete()
+    response = requests.get(url)
+    data = response.json()
 
+    # サーバーがオンラインの場合
+    if data['online']:
+        embed = discord.Embed(
+            title=f"{data['hostname']}",
+            url=url,
+            description="ステータス: 🟢オンライン",
+            timestamp=discord.utils.utcnow(),
+            color=discord.Colour.green()
+        )
+        embed.set_thumbnail(url="https://i.ibb.co/FLz1GG2h/icon.png")
+        embed.add_field(name="バージョン", value=data['version'], inline=True)
+        embed.add_field(name="プレイヤー", value=f"{data['players']['online']} / {data['players']['max']}", inline=True)
+        embed.add_field(name="サーバーアドレス", value=data['hostname'], inline=True)
+        embed.add_field(name="ポート", value=data['port'], inline=True)
+
+    # サーバーがオフラインの場合
+    else:
+        embed = discord.Embed(
+            title=f"{data['hostname']}",
+            url=url,
+            description="ステータス: 🔴オフライン",
+            timestamp=discord.utils.utcnow(),
+            color=discord.Colour.red()
+        )
+        embed.set_thumbnail(url="https://i.ibb.co/FLz1GG2h/icon.png")
+        embed.add_field(name="サーバー情報を取得できませんでした。\nサーバーがオフライン、または存在しないアドレスです。", value="", inline=True)
+    
+    # メッセージ送信
+    await interaction.response.send_message(embed=embed)
 bot.run(TOKEN)
